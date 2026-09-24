@@ -1,11 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: risbun <risbun.inc@gmail.com>
-Date: Mon, 18 July 2022 04:51:00 +0200
+Date: Mon, 18 Jul 2022 04:51:00 +0200
 Subject: [PATCH] Ender dragon knockback fix
 
 
 diff --git a/src/main/java/net/minecraft/server/Explosion.java b/src/main/java/net/minecraft/server/Explosion.java
-index e408ec8c6..a9208d585 100644
+index e408ec8c645e9ceb278a13a5b0de8ecf57f3929e..a9208d585279584907376acce6963eeaa4e5c1df 100644
 --- a/src/main/java/net/minecraft/server/Explosion.java
 +++ b/src/main/java/net/minecraft/server/Explosion.java
 @@ -182,7 +182,7 @@ public class Explosion {

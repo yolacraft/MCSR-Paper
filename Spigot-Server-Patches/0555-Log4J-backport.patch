@@ -1,11 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: risbun <risbun.inc@gmail.com>
-Date: Mon, 18 July 2022 04:51:00 +0200
+Date: Mon, 18 Jul 2022 04:51:00 +0200
 Subject: [PATCH] Log4J backport
 
 
 diff --git a/pom.xml b/pom.xml
-index ef8ee637a..0915e72f6 100644
+index ef8ee637a8a0e5e703922b2991c58f4f116b23fb..0915e72f621960d760ef79a55d6757c829e175aa 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -63,19 +63,19 @@
