@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 02:14:06 +0100
+Subject: [PATCH] Configurable crystal projectile explosion fix
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index 260c04cc3560542fe0721ae603966592b6ffc447..fa32051d704405dd78604256c3b4bad7eba7e907 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -128,8 +128,11 @@ public class PaperConfig {
+ 
+     // MCSR start
+     public static boolean mcsrDragonKnockbackFix = true;
++    public static boolean mcsrCrystalProjectileExplosionFix = true;
++
+     static void mcsrSettings() {
+         mcsrDragonKnockbackFix = getBoolean("MCSR.dragon-knockback-fix", true);
++        mcsrCrystalProjectileExplosionFix = getBoolean("MCSR.crystal-projectile-explosion-fix", true);
+     }
+     // MCSR end
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityEnderCrystal.java b/src/main/java/net/minecraft/server/EntityEnderCrystal.java
+index 21dfe7f4251300873f2c305c1a02467b86d1bcfe..e6e000fd557f5bc4c644714ca5dc11c2e3e3af0b 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderCrystal.java
++++ b/src/main/java/net/minecraft/server/EntityEnderCrystal.java
+@@ -88,7 +88,7 @@ public class EntityEnderCrystal extends Entity {
+         } else {
+             if (!this.dead && !this.world.isClientSide) {
+                 // CraftBukkit start - All non-living entities need this
+-                if (CraftEventFactory.handleNonLivingEntityDamageEvent(this, damagesource, f)) {
++                if (CraftEventFactory.handleNonLivingEntityDamageEvent(this, damagesource, f, !com.destroystokyo.paper.PaperConfig.mcsrCrystalProjectileExplosionFix)) { // MCSR
+                     return false;
+                 }
+                 // CraftBukkit end

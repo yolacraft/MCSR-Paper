@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 02:09:50 +0100
+Subject: [PATCH] Configurable dragon knockback fix
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index 2617bb8464342f2ee4194ef0906890e8bb292d6b..260c04cc3560542fe0721ae603966592b6ffc447 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -127,7 +127,9 @@ public class PaperConfig {
+     }
+ 
+     // MCSR start
++    public static boolean mcsrDragonKnockbackFix = true;
+     static void mcsrSettings() {
++        mcsrDragonKnockbackFix = getBoolean("MCSR.dragon-knockback-fix", true);
+     }
+     // MCSR end
+ 
+diff --git a/src/main/java/net/minecraft/server/Explosion.java b/src/main/java/net/minecraft/server/Explosion.java
+index a9208d585279584907376acce6963eeaa4e5c1df..7fa8c1eb488fcaffecc47ec4e5198c531cbe2684 100644
+--- a/src/main/java/net/minecraft/server/Explosion.java
++++ b/src/main/java/net/minecraft/server/Explosion.java
+@@ -182,7 +182,7 @@ public class Explosion {
+                         entity.forceExplosionKnockback = false;
+                         boolean wasDamaged = entity.damageEntity(this.b(), (float) ((int) ((d13 * d13 + d13) / 2.0D * 7.0D * (double) f2 + 1.0D)));
+                         CraftEventFactory.entityDamage = null;
+-                        if (!wasDamaged && !(entity instanceof EntityTNTPrimed || entity instanceof EntityFallingBlock || entity instanceof EntityEnderDragon) && !entity.forceExplosionKnockback) {
++                        if (!wasDamaged && !(entity instanceof EntityTNTPrimed || entity instanceof EntityFallingBlock || (com.destroystokyo.paper.PaperConfig.mcsrDragonKnockbackFix && entity instanceof EntityEnderDragon)) && !entity.forceExplosionKnockback) { // MCSR - configurable dragon knockback fix
+                             continue;
+                         }
+                         // CraftBukkit end

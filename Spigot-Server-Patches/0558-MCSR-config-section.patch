@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 02:00:31 +0100
+Subject: [PATCH] MCSR config section
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index 60f03502a7fd622d2de3b2da9fe8014b289f3d31..2617bb8464342f2ee4194ef0906890e8bb292d6b 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -65,6 +65,7 @@ public class PaperConfig {
+         }
+         config.options().header(HEADER);
+         config.options().copyDefaults(true);
++        mcsrSettings();
+         verbose = getBoolean("verbose", false);
+ 
+         commands = new HashMap<String, Command>();
+@@ -125,6 +126,11 @@ public class PaperConfig {
+         }
+     }
+ 
++    // MCSR start
++    static void mcsrSettings() {
++    }
++    // MCSR end
++
+     private static final Pattern SPACE = Pattern.compile(" ");
+     private static final Pattern NOT_NUMERIC = Pattern.compile("[^-\\d.]");
+     public static int getSeconds(String str) {

@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 02:17:21 +0100
+Subject: [PATCH] Per player view distance
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index d20153e52114db37c3b6ae91ec73db75a1da7f84..90170936b2bbdf52fa947c61b92d917c7b6573b8 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -128,6 +128,8 @@ public class PaperConfig {
+ 
+     // MCSR start
+     public static boolean mcsrDragonKnockbackFix = true;
++    public static boolean mcsrPerPlayerViewDistance = true;
++    public static boolean mcsrSimulateVanillaLazyLoading = true;
+     public static boolean mcsrCrystalProjectileExplosionFix = true;
+     public static boolean mcsrDragonLagCompensation = true;
+     public static int mcsrDragonLagCompensationMaxTicks = 10;
+@@ -135,6 +137,8 @@ public class PaperConfig {
+ 
+     static void mcsrSettings() {
+         mcsrDragonKnockbackFix = getBoolean("MCSR.dragon-knockback-fix", true);
++        mcsrPerPlayerViewDistance = getBoolean("MCSR.per-player-view-distance.enable", true);
++        mcsrSimulateVanillaLazyLoading = getBoolean("MCSR.per-player-view-distance.simulate-vanilla-lazy-loading", true);
+         mcsrCrystalProjectileExplosionFix = getBoolean("MCSR.crystal-projectile-explosion-fix", true);
+         mcsrDragonLagCompensation = getBoolean("MCSR.dragon-lag-compensation.enable", true);
+         mcsrDragonLagCompensationMaxTicks = getInt("MCSR.dragon-lag-compensation.max-ticks", 10);
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index c72cfd2bdfbe4536f6799fc4dff195c1f66d4c94..d5c4ac54968f5ff5e05b06fa03f1e602c8a386f2 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -115,6 +115,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+     public boolean supressTrackerForLogin = false; // Paper
+     public boolean didPlayerJoinEvent = false; // Paper
+     public Integer clientViewDistance;
++    public int mcsrLazyViewDistance = -1; // MCSR - per player view distance, client view distance including the lazy unload buffer
+     // CraftBukkit end
+     public PlayerNaturallySpawnCreaturesEvent playerNaturallySpawnedEvent; // Paper
+ 
+@@ -1722,7 +1723,13 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+             this.server.server.getPluginManager().callEvent(event);
+         }
+         this.locale = packetplayinsettings.locale;
++        // MCSR start - per player view distance
++        Integer oldClientViewDistance = this.clientViewDistance;
+         this.clientViewDistance = packetplayinsettings.viewDistance;
++        if (com.destroystokyo.paper.PaperConfig.mcsrPerPlayerViewDistance && !java.util.Objects.equals(oldClientViewDistance, this.clientViewDistance)) {
++            ((WorldServer) this.world).getChunkProvider().playerChunkMap.updatePlayerViewDistance(this);
++        }
++        // MCSR end
+         // CraftBukkit end
+         // Paper start - add PlayerLocaleChangeEvent
+         // Since the field is initialized to null, this event should always fire the first time the packet is received
+diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
+index 03a79ff9929d0df6b5a2da9d86a31c0c67a4b8cf..68cb7b36f46798eb058c640119190ecb1cd2245f 100644
+--- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
++++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
+@@ -192,6 +192,32 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         return Math.max(this.getEffectiveViewDistance(), this.getEffectiveNoTickViewDistance());
+     }
+ 
++    // MCSR start - per player view distance, only send chunks within the clients render distance
++    public final int getPlayerViewDistance(EntityPlayer player) {
++        int loadViewDistance = this.getLoadViewDistance();
++        if (!com.destroystokyo.paper.PaperConfig.mcsrPerPlayerViewDistance || player.clientViewDistance == null) {
++            return loadViewDistance;
++        }
++        int clientViewDistance = com.destroystokyo.paper.PaperConfig.mcsrSimulateVanillaLazyLoading && player.mcsrLazyViewDistance != -1 ? player.mcsrLazyViewDistance : player.clientViewDistance;
++        return Math.min(loadViewDistance, Math.max(2, clientViewDistance));
++    }
++
++    public final void updatePlayerViewDistance(EntityPlayer player) {
++        int clientViewDistance = player.clientViewDistance;
++        if (player.mcsrLazyViewDistance == -1 || clientViewDistance >= player.mcsrLazyViewDistance) {
++            player.mcsrLazyViewDistance = clientViewDistance;
++        } else {
++            player.mcsrLazyViewDistance = Math.min(player.mcsrLazyViewDistance, clientViewDistance + 3);
++        }
++        if (this.playerViewDistanceBroadcastMap.getLastViewDistance(player) == -1) {
++            return;
++        }
++        if (player.playerConnection != null) {
++            player.playerConnection.sendPacket(new PacketPlayOutViewDistance(this.getPlayerViewDistance(player)));
++        }
++        this.updateMaps(player);
++    }
++
+     public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerViewDistanceBroadcastMap;
+     public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerViewDistanceTickMap;
+     public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerViewDistanceNoTickMap;
+@@ -222,7 +248,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         }
+ 
+         player.needsChunkCenterUpdate = true;
+-        this.playerViewDistanceBroadcastMap.add(player, chunkX, chunkZ, effectiveNoTickViewDistance + 1); // clients need an extra neighbour to render the full view distance configured
++        this.playerViewDistanceBroadcastMap.add(player, chunkX, chunkZ, this.getPlayerViewDistance(player) + 1); // clients need an extra neighbour to render the full view distance configured // MCSR - per player view distance
+         player.needsChunkCenterUpdate = false;
+         // Paper end - no-tick view distance
+     }
+@@ -269,7 +295,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         }
+ 
+         player.needsChunkCenterUpdate = true;
+-        this.playerViewDistanceBroadcastMap.update(player, chunkX, chunkZ, effectiveNoTickViewDistance + 1); // clients need an extra neighbour to render the full view distance configured
++        this.playerViewDistanceBroadcastMap.update(player, chunkX, chunkZ, this.getPlayerViewDistance(player) + 1); // clients need an extra neighbour to render the full view distance configured // MCSR - per player view distance
+         player.needsChunkCenterUpdate = false;
+         // Paper end - no-tick view distance
+     }
+@@ -1520,7 +1546,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+                 PlayerConnection connection = player.playerConnection;
+                 if (connection != null) {
+                     // moved in from PlayerList
+-                    connection.sendPacket(new PacketPlayOutViewDistance(loadViewDistance));
++                    connection.sendPacket(new PacketPlayOutViewDistance(this.getPlayerViewDistance(player))); // MCSR - per player view distance
+                 }
+                 this.updateMaps(player);
+             }
+diff --git a/src/main/java/net/minecraft/server/PlayerList.java b/src/main/java/net/minecraft/server/PlayerList.java
+index 38d83bb3183c6b8d7708e27b7427a757e3d26b0f..ceb27c9879a2d8ae7711a0e577261e01384cb00c 100644
+--- a/src/main/java/net/minecraft/server/PlayerList.java
++++ b/src/main/java/net/minecraft/server/PlayerList.java
+@@ -834,7 +834,7 @@ public abstract class PlayerList {
+         // CraftBukkit start
+         WorldData worlddata = worldserver1.getWorldData();
+         entityplayer1.playerConnection.sendPacket(new PacketPlayOutRespawn(worldserver1.getTypeKey(), worldserver1.getDimensionKey(), BiomeManager.a(worldserver1.getSeed()), entityplayer1.playerInteractManager.getGameMode(), entityplayer1.playerInteractManager.c(), worldserver1.isDebugWorld(), worldserver1.isFlatWorld(), flag));
+-        entityplayer1.playerConnection.sendPacket(new PacketPlayOutViewDistance(worldserver1.getChunkProvider().playerChunkMap.getLoadViewDistance())); // Spigot // Paper - no-tick view distance
++        entityplayer1.playerConnection.sendPacket(new PacketPlayOutViewDistance(worldserver1.getChunkProvider().playerChunkMap.getPlayerViewDistance(entityplayer1))); // Spigot // Paper - no-tick view distance // MCSR - per player view distance
+         entityplayer1.spawnIn(worldserver1);
+         entityplayer1.dead = false;
+         entityplayer1.playerConnection.teleport(new Location(worldserver1.getWorld(), entityplayer1.locX(), entityplayer1.locY(), entityplayer1.locZ(), entityplayer1.yaw, entityplayer1.pitch));

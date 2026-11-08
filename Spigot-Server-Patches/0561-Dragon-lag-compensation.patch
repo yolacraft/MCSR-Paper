@@ -1,0 +1,162 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 02:16:56 +0100
+Subject: [PATCH] Dragon lag compensation
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index fa32051d704405dd78604256c3b4bad7eba7e907..d20153e52114db37c3b6ae91ec73db75a1da7f84 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -129,10 +129,17 @@ public class PaperConfig {
+     // MCSR start
+     public static boolean mcsrDragonKnockbackFix = true;
+     public static boolean mcsrCrystalProjectileExplosionFix = true;
++    public static boolean mcsrDragonLagCompensation = true;
++    public static int mcsrDragonLagCompensationMaxTicks = 10;
++    public static int mcsrDragonLagCompensationTickOffset = 1;
+ 
+     static void mcsrSettings() {
+         mcsrDragonKnockbackFix = getBoolean("MCSR.dragon-knockback-fix", true);
+         mcsrCrystalProjectileExplosionFix = getBoolean("MCSR.crystal-projectile-explosion-fix", true);
++        mcsrDragonLagCompensation = getBoolean("MCSR.dragon-lag-compensation.enable", true);
++        mcsrDragonLagCompensationMaxTicks = getInt("MCSR.dragon-lag-compensation.max-ticks", 10);
++
++        mcsrDragonLagCompensationTickOffset = getInt("MCSR.dragon-lag-compensation.tick-offset", 1);
+     }
+     // MCSR end
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityEnderDragon.java b/src/main/java/net/minecraft/server/EntityEnderDragon.java
+index 63a759cc18b5b765bc9d34f71dd775fd35dee280..b98611a3beb00af123e966f21b8cf32c8677ddf4 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderDragon.java
++++ b/src/main/java/net/minecraft/server/EntityEnderDragon.java
+@@ -297,10 +297,37 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+                     this.children[k].F = avec3d[k].z;
+                 }
+ 
++                if (!this.world.isClientSide) this.mcsrRecordPartPositions(); // MCSR - dragon lag compensation
+             }
+         }
+     }
+ 
++    // MCSR start - dragon lag compensation
++    public static final int MCSR_PART_HISTORY_SIZE = 21;
++    private final double[][][] mcsrPartHistory = new double[MCSR_PART_HISTORY_SIZE][][];
++    private int mcsrPartHistoryIndex = -1;
++    private int mcsrPartHistoryCount = 0;
++
++    private void mcsrRecordPartPositions() {
++        double[][] positions = new double[this.children.length][];
++        for (int i = 0; i < this.children.length; ++i) {
++            positions[i] = new double[] { this.children[i].locX(), this.children[i].locY(), this.children[i].locZ() };
++        }
++        this.mcsrPartHistoryIndex = (this.mcsrPartHistoryIndex + 1) % MCSR_PART_HISTORY_SIZE;
++        this.mcsrPartHistory[this.mcsrPartHistoryIndex] = positions;
++        this.mcsrPartHistoryCount = Math.min(this.mcsrPartHistoryCount + 1, MCSR_PART_HISTORY_SIZE);
++    }
++
++    @Nullable
++    public double[][] mcsrGetPartPositions(int ticksAgo) {
++        if (this.mcsrPartHistoryCount == 0) {
++            return null;
++        }
++        ticksAgo = Math.max(0, Math.min(ticksAgo, this.mcsrPartHistoryCount - 1));
++        return this.mcsrPartHistory[Math.floorMod(this.mcsrPartHistoryIndex - ticksAgo, MCSR_PART_HISTORY_SIZE)];
++    }
++    // MCSR end
++
+     private void a(EntityComplexPart entitycomplexpart, double d0, double d1, double d2) {
+         entitycomplexpart.setPosition(this.locX() + d0, this.locY() + d1, this.locZ() + d2);
+     }
+diff --git a/src/main/java/net/minecraft/server/Explosion.java b/src/main/java/net/minecraft/server/Explosion.java
+index 7fa8c1eb488fcaffecc47ec4e5198c531cbe2684..1de574f90a93a8b336856a66c7d4fe614c44417a 100644
+--- a/src/main/java/net/minecraft/server/Explosion.java
++++ b/src/main/java/net/minecraft/server/Explosion.java
+@@ -154,6 +154,10 @@ public class Explosion {
+         int i1 = MathHelper.floor(this.posY + (double) f2 + 1.0D);
+         int j1 = MathHelper.floor(this.posZ - (double) f2 - 1.0D);
+         int k1 = MathHelper.floor(this.posZ + (double) f2 + 1.0D);
++        // MCSR start - dragon lag compensation
++        List<EntityEnderDragon> mcsrRewoundDragons = this.mcsrRewindDragonParts(new AxisAlignedBB((double) i, (double) l, (double) j1, (double) j, (double) i1, (double) k1));
++        try {
++        // MCSR end
+         List<Entity> list = this.world.getEntities(this.source, new AxisAlignedBB((double) i, (double) l, (double) j1, (double) j, (double) i1, (double) k1), (com.google.common.base.Predicate<Entity>) entity -> IEntitySelector.canAITarget().test(entity) && !entity.dead); // Paper - Fix lag from explosions processing dead entities
+         Vec3D vec3d = new Vec3D(this.posX, this.posY, this.posZ);
+ 
+@@ -204,8 +208,59 @@ public class Explosion {
+                 }
+             }
+         }
++        // MCSR start - dragon lag compensation
++        } finally {
++            this.mcsrRestoreDragonParts(mcsrRewoundDragons);
++        }
++        // MCSR end
++
++    }
++
++    // MCSR start - dragon lag compensation
++    @Nullable
++    public static EntityPlayer mcsrCompensationPlayer;
++    private final Map<EntityEnderDragon, double[][]> mcsrSavedPartPositions = Maps.newHashMap();
++
++    private List<EntityEnderDragon> mcsrRewindDragonParts(AxisAlignedBB searchBox) {
++        EntityPlayer player = mcsrCompensationPlayer;
++        if (!com.destroystokyo.paper.PaperConfig.mcsrDragonLagCompensation || player == null || this.world.isClientSide) {
++            return Collections.emptyList();
++        }
++        int ticks = MathHelper.clamp(Math.round(player.ping / 50.0F) + com.destroystokyo.paper.PaperConfig.mcsrDragonLagCompensationTickOffset, 0, Math.min(com.destroystokyo.paper.PaperConfig.mcsrDragonLagCompensationMaxTicks, EntityEnderDragon.MCSR_PART_HISTORY_SIZE - 1));
++
++        List<EntityEnderDragon> dragons = this.world.a(EntityEnderDragon.class, searchBox.g(16.0D), (dragon) -> !dragon.dead);
++        if (ticks == 0 || dragons.isEmpty()) {
++            return Collections.emptyList();
++        }
++        for (EntityEnderDragon dragon : dragons) {
++            double[][] history = dragon.mcsrGetPartPositions(ticks);
++            if (history == null) {
++                continue;
++            }
++            EntityComplexPart[] parts = dragon.getComplexParts();
++            double[][] current = new double[parts.length][];
++            for (int n = 0; n < parts.length; ++n) {
++                current[n] = new double[] { parts[n].locX(), parts[n].locY(), parts[n].locZ() };
++                parts[n].setPosition(history[n][0], history[n][1], history[n][2]);
++            }
++            this.mcsrSavedPartPositions.put(dragon, current);
++        }
++        return dragons;
++    }
+ 
++    private void mcsrRestoreDragonParts(List<EntityEnderDragon> dragons) {
++        for (EntityEnderDragon dragon : dragons) {
++            double[][] current = this.mcsrSavedPartPositions.remove(dragon);
++            if (current == null) {
++                continue;
++            }
++            EntityComplexPart[] parts = dragon.getComplexParts();
++            for (int n = 0; n < parts.length; ++n) {
++                parts[n].setPosition(current[n][0], current[n][1], current[n][2]);
++            }
++        }
+     }
++    // MCSR end
+ 
+     public void a(boolean flag) {
+         if (this.world.isClientSide) {
+diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
+index 6d192b27440ddfd34555005dafefbce6bbb67236..b0f0f5a9dc8b804bd8ee42363c6a9592d716d3fe 100644
+--- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
++++ b/src/main/java/net/minecraft/server/PlayerInteractManager.java
+@@ -504,7 +504,12 @@ public class PlayerInteractManager {
+             ItemStack itemstack1 = itemstack.cloneItemStack();
+ 
+             if (!flag1) {
++                Explosion.mcsrCompensationPlayer = entityplayer;
++                try {
+                 enuminteractionresult = iblockdata.interact(world, entityplayer, enumhand, movingobjectpositionblock);
++                } finally {
++                    Explosion.mcsrCompensationPlayer = null;
++                }
+ 
+                 if (enuminteractionresult.a()) {
+                     CriterionTriggers.M.a(entityplayer, blockposition, itemstack1);
