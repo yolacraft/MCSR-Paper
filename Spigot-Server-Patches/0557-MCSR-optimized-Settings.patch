@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yolacraft1604 <rubenbertram1604@gmail.com>
+Date: Sun, 8 Nov 2026 01:33:05 +0100
+Subject: [PATCH] MCSR optimized Settings
+
+
+diff --git a/src/main/java/net/minecraft/server/DedicatedServerProperties.java b/src/main/java/net/minecraft/server/DedicatedServerProperties.java
+index 6786fd0947724069366a2375c710ec518a92f2b1..902410ef7b967e63b0de35b7068fbdf7b00c1dac 100644
+--- a/src/main/java/net/minecraft/server/DedicatedServerProperties.java
++++ b/src/main/java/net/minecraft/server/DedicatedServerProperties.java
+@@ -15,7 +15,7 @@ public class DedicatedServerProperties extends PropertyManager<DedicatedServerPr
+     public final boolean pvp = this.getBoolean("pvp", true);
+     public final boolean allowFlight = this.getBoolean("allow-flight", false);
+     public final String resourcePack = this.getString("resource-pack", "");
+-    public final String motd = this.getString("motd", "A Minecraft Server");
++    public final String motd = this.getString("motd", "A Minecraft Server optimized for MCSR");
+     public final boolean forceGamemode = this.getBoolean("force-gamemode", false);
+     public final boolean enforceWhitelist = this.getBoolean("enforce-whitelist", false);
+     public final EnumDifficulty difficulty;
+@@ -86,12 +86,12 @@ public class DedicatedServerProperties extends PropertyManager<DedicatedServerPr
+         this.snooperEnabled = false;
+         this.useNativeTransport = this.getBoolean("use-native-transport", true);
+         this.enableCommandBlock = this.getBoolean("enable-command-block", false);
+-        this.spawnProtection = this.getInt("spawn-protection", 16);
++        this.spawnProtection = this.getInt("spawn-protection", 0);
+         this.opPermissionLevel = this.getInt("op-permission-level", 4);
+         this.functionPermissionLevel = this.getInt("function-permission-level", 2);
+         this.maxTickTime = this.getLong("max-tick-time", TimeUnit.MINUTES.toMillis(1L));
+-        this.viewDistance = this.getInt("view-distance", 10);
+-        this.maxPlayers = this.getInt("max-players", 20);
++        this.viewDistance = this.getInt("view-distance", 32);
++        this.maxPlayers = this.getInt("max-players", 100);
+         this.networkCompressionThreshold = this.getInt("network-compression-threshold", 256);
+         this.broadcastRconToOps = this.getBoolean("broadcast-rcon-to-ops", true);
+         this.broadcastConsoleToOps = this.getBoolean("broadcast-console-to-ops", true);
+@@ -103,7 +103,7 @@ public class DedicatedServerProperties extends PropertyManager<DedicatedServerPr
+         this.enableStatus = this.getBoolean("enable-status", true);
+         this.entityBroadcastRangePercentage = this.a("entity-broadcast-range-percentage", (integer) -> {
+             return MathHelper.clamp(integer, 10, 1000);
+-        }, 100);
++        }, 500);
+         this.playerIdleTimeout = this.b("player-idle-timeout", 0);
+         this.whiteList = this.b("white-list", false);
+         this.generatorSettings = GeneratorSettings.a(properties);
